@@ -11,8 +11,8 @@ if (is_post()) {
     if (!$errors) {
         try {
             $id = in_transaction(function (PDO $pdo) use ($d, $qty) {
-                $pdo->prepare('INSERT INTO inventory_items (sku,name,category_id,brand,compatibility,description,supplier_id,purchase_cost,selling_price,stock_qty,min_stock,unit) VALUES (?,?,?,?,?,?,?,?,?,0,?,?)')
-                    ->execute([$d['sku'], $d['name'], $d['category_id'], $d['brand'] ?: null, $d['compatibility'] ?: null, $d['description'] ?: null, $d['supplier_id'], $d['purchase_cost'], $d['selling_price'], $d['min_stock'], $d['unit']]);
+                $pdo->prepare('INSERT INTO inventory_items (sku,name,category_id,brand,compatibility,description,supplier_id,purchase_cost,selling_price,labor_rate,stock_qty,min_stock,unit) VALUES (?,?,?,?,?,?,?,?,?,?,0,?,?)')
+                    ->execute([$d['sku'], $d['name'], $d['category_id'], $d['brand'] ?: null, $d['compatibility'] ?: null, $d['description'] ?: null, $d['supplier_id'], $d['purchase_cost'], $d['selling_price'], $d['labor_rate'], $d['min_stock'], $d['unit']]);
                 $id = (int)$pdo->lastInsertId();
                 if ($qty > 0) stock_change($pdo, $id, $qty, 'adjustment', 'inventory_item', $id, 'Initial stock', current_user()['id']);
                 return $id;

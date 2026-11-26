@@ -34,15 +34,15 @@ require __DIR__ . '/../includes/header.php';
 <div class="card">
   <p class="muted">Total inventory value (purchase cost x stock, active items): <strong><?= money($value) ?></strong> &middot; Sample items are demonstration data.</p>
   <div class="table-wrap"><table class="table">
-    <thead><tr><th>SKU</th><th>Part</th><th>Category</th><th>Brand</th><th class="num">Cost</th><th class="num">Price</th><th class="num">Stock</th><th>Status</th><th></th></tr></thead><tbody>
+    <thead><tr><th>SKU</th><th>Part</th><th>Category</th><th>Brand</th><th class="num">Cost</th><th class="num">Price</th><th class="num">Labor / unit</th><th class="num">Stock</th><th>Status</th><th></th></tr></thead><tbody>
     <?php foreach ($items as $i): ?>
       <tr><td><?= e($i['sku']) ?></td><td><a href="view.php?id=<?= (int)$i['id'] ?>"><?= e($i['name']) ?></a><?= $i['is_demo'] ? ' <span class="badge">demo</span>' : '' ?><?= $i['is_active'] ? '' : ' <span class="badge b-out">inactive</span>' ?></td>
-      <td><?= e($i['cat']) ?></td><td><?= e($i['brand']) ?></td><td class="num"><?= money($i['purchase_cost']) ?></td><td class="num"><?= money($i['selling_price']) ?></td>
+      <td><?= e($i['cat']) ?></td><td><?= e($i['brand']) ?></td><td class="num"><?= money($i['purchase_cost']) ?></td><td class="num"><?= money($i['selling_price']) ?></td><td class="num"><?= money($i['labor_rate']) ?></td>
       <td class="num"><?= (int)$i['stock_qty'] ?> <?= e($i['unit']) ?></td><td><?= stock_badge((int)$i['stock_qty'], (int)$i['min_stock']) ?></td>
       <td class="actions"><a class="btn btn-sm btn-outline" href="edit.php?id=<?= (int)$i['id'] ?>" title="Edit"><i class="fa-solid fa-pen"></i></a>
         <form method="post" data-confirm="<?= $i['is_active'] ? 'Deactivate' : 'Activate' ?> this item?"><?= csrf_field() ?><input type="hidden" name="action" value="toggle"><input type="hidden" name="id" value="<?= (int)$i['id'] ?>"><input type="hidden" name="q" value="<?= e($q) ?>"><input type="hidden" name="status" value="<?= e($st) ?>">
         <button class="btn btn-sm btn-outline" type="submit" title="<?= $i['is_active'] ? 'Deactivate' : 'Activate' ?>"><i class="fa-solid <?= $i['is_active'] ? 'fa-eye-slash' : 'fa-eye' ?>"></i></button></form></td></tr>
-    <?php endforeach; if (!$items): ?><tr><td colspan="9" class="empty">No items found.</td></tr><?php endif; ?>
+    <?php endforeach; if (!$items): ?><tr><td colspan="10" class="empty">No items found.</td></tr><?php endif; ?>
     </tbody></table></div>
 </div>
 <?php require __DIR__ . '/../includes/footer.php'; ?>

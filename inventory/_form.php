@@ -7,6 +7,7 @@ function item_validate(?int $id = null): array {
         'compatibility' => input('compatibility'), 'description' => input('description'),
         'supplier_id' => parse_int($_POST['supplier_id'] ?? '') ?: null,
         'purchase_cost' => parse_money($_POST['purchase_cost'] ?? ''), 'selling_price' => parse_money($_POST['selling_price'] ?? ''),
+        'labor_rate' => parse_money($_POST['labor_rate'] ?? '0'),
         'min_stock' => parse_int($_POST['min_stock'] ?? '', true), 'unit' => input('unit', 'pc'),
     ];
     $er = [];
@@ -16,6 +17,7 @@ function item_validate(?int $id = null): array {
     if ($d['supplier_id'] && !fetch_row('SELECT id FROM suppliers WHERE id=?', [$d['supplier_id']])) $er[] = 'Choose a valid supplier.';
     if ($d['purchase_cost'] === null) $er[] = 'Purchase cost must be a valid amount.';
     if ($d['selling_price'] === null) $er[] = 'Selling price must be a valid amount.';
+    if ($d['labor_rate'] === null) $er[] = 'Labor rate must be a valid amount.';
     if ($d['min_stock'] === null) $er[] = 'Minimum stock must be a whole number.';
     if ($d['unit'] === '' || mb_strlen($d['unit']) > 20) $er[] = 'Unit of measurement is required.';
     if (!$er && fetch_row('SELECT id FROM inventory_items WHERE sku=? AND id<>?', [$d['sku'], $id ?? 0])) $er[] = 'That SKU already exists.';
@@ -34,6 +36,7 @@ function item_form(array $v, bool $isNew): void { ?>
     <?php foreach (active_suppliers() as $s): ?><option value="<?= (int)$s['id'] ?>" <?= (string)($v['supplier_id'] ?? '') === (string)$s['id'] ? 'selected' : '' ?>><?= e($s['name']) ?></option><?php endforeach; ?></select></label>
   <label class="field"><span>Purchase cost *</span><input type="number" step="0.01" min="0" name="purchase_cost" value="<?= e($v['purchase_cost'] ?? '0.00') ?>" required></label>
   <label class="field"><span>Selling price *</span><input type="number" step="0.01" min="0" name="selling_price" value="<?= e($v['selling_price'] ?? '0.00') ?>" required></label>
+  <label class="field"><span>Labor per unit *</span><input type="number" step="0.01" min="0" name="labor_rate" value="<?= e($v['labor_rate'] ?? '0.00') ?>" required><small class="hint">Applied for each unit used in a repair. Use ₱0.00 if no labor charge applies.</small></label>
   <?php if ($isNew): ?><label class="field"><span>Initial stock quantity</span><input type="number" min="0" name="stock_qty" value="<?= e($v['stock_qty'] ?? '0') ?>"></label><?php endif; ?>
   <label class="field"><span>Minimum stock threshold *</span><input type="number" min="0" name="min_stock" value="<?= e($v['min_stock'] ?? '5') ?>" required></label>
   <label class="field"><span>Unit of measurement *</span><input type="text" name="unit" value="<?= e($v['unit'] ?? 'pc') ?>" required maxlength="20" placeholder="pc, set, bottle..."></label>

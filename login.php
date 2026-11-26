@@ -21,7 +21,7 @@ $flashes = get_flashes();
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Login | M-Garage</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-<link rel="stylesheet" href="<?= e(url('assets/css/style.css')) ?>">
+<link rel="stylesheet" href="<?= e(url('assets/css/style.css')) ?>?v=<?= substr(sha1_file(__DIR__ . '/assets/css/style.css'), 0, 12) ?>">
 </head>
 <body class="login-body">
 <div class="login-card">
@@ -33,10 +33,11 @@ $flashes = get_flashes();
     <label class="field"><span>Username</span>
       <div class="input-icon"><i class="fa-solid fa-user"></i><input type="text" name="username" value="<?= e($_POST['username'] ?? '') ?>" required autofocus></div></label>
     <label class="field"><span>Password</span>
-      <div class="input-icon"><i class="fa-solid fa-lock"></i><input type="password" name="password" required></div></label>
+      <div class="input-icon password-input"><i class="fa-solid fa-lock"></i><input id="login-password" type="password" name="password" required><button class="password-toggle" type="button" aria-label="Show password" aria-pressed="false" aria-controls="login-password"><i class="fa-solid fa-eye" aria-hidden="true"></i></button></div></label>
     <button class="btn btn-primary btn-block" type="submit"><i class="fa-solid fa-right-to-bracket"></i> Log in</button>
   </form>
   <p class="login-foot">Poblacion, Inabanga, Bohol</p>
 </div>
+<script>document.querySelector(".password-toggle")?.addEventListener("click", function () { const input = document.getElementById("login-password"); const showing = input.type === "password"; input.type = showing ? "text" : "password"; this.setAttribute("aria-pressed", String(showing)); this.setAttribute("aria-label", showing ? "Hide password" : "Show password"); this.querySelector("i").className = showing ? "fa-solid fa-eye-slash" : "fa-solid fa-eye"; });</script>
 </body>
 </html>

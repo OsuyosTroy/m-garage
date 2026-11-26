@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 840 260" role="img" aria-labelledby="title desc">
+  <title id="title">M-Garage animated logo</title>
+  <desc id="desc">A six-second looping animation of the M-Garage motorcycle service system logo.</desc>
+  <defs>
+    <linearGradient id="hot" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#e8441e"/>
+      <stop offset="1" stop-color="#ff7a1a"/>
+    </linearGradient>
+    <filter id="glow" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="5" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <clipPath id="reveal">
+      <rect x="0" y="0" width="840" height="260">
+        <animate attributeName="width" values="0;840;840;0;0" keyTimes="0;.2;.8;.98;1" dur="6s" repeatCount="indefinite"/>
+      </rect>
+    </clipPath>
+  </defs>
+
+  <g clip-path="url(#reveal)" font-family="Segoe UI, Arial, sans-serif">
+    <!-- Compact badge with a custom line-art motorcycle mark. -->
+    <circle cx="128" cy="130" r="92" fill="#1c1d21" stroke="#34363d" stroke-width="3"/>
+    <circle cx="128" cy="130" r="82" fill="none" stroke="url(#hot)" stroke-width="2" stroke-dasharray="515" stroke-dashoffset="515">
+      <animate attributeName="stroke-dashoffset" values="515;0;0;515" keyTimes="0;.2;.82;1" dur="6s" repeatCount="indefinite"/>
+    </circle>
+    <g fill="none" stroke="#f6f7f8" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="83" cy="157" r="20" stroke="url(#hot)"/>
+      <circle cx="168" cy="157" r="20" stroke="url(#hot)"/>
+      <path d="M83 157l27-36 26 36H83l18-24h39l28 24-15-39h-18m-27 3 15-12h26"/>
+      <path d="M132 119l-9-11h-15m47 10 11-13h14"/>
+      <path d="M109 121l12-9h22l9 10" stroke="url(#hot)" stroke-width="8"/>
+    </g>
+    <g fill="#f7f7f8">
+      <text x="256" y="132" font-size="76" font-weight="800" letter-spacing="-3">M-<tspan fill="url(#hot)">GARAGE</tspan></text>
+      <text x="263" y="178" font-size="20" font-weight="600" letter-spacing="8" fill="#aeb1b8">MOTORCYCLE SERVICE SYSTEM</text>
+    </g>
+    <path d="M263 199h420" stroke="#393b42" stroke-width="2"/>
+    <path d="M263 199h420" stroke="url(#hot)" stroke-width="3" stroke-dasharray="420" stroke-dashoffset="420" filter="url(#glow)">
+      <animate attributeName="stroke-dashoffset" values="420;0;0;420" keyTimes="0;.38;.82;1" dur="6s" repeatCount="indefinite"/>
+    </path>
+    <circle cx="692" cy="199" r="4" fill="#ff7a1a" filter="url(#glow)">
+      <animate attributeName="opacity" values="0;0;1;1;0" keyTimes="0;.34;.4;.82;1" dur="6s" repeatCount="indefinite"/>
+    </circle>
+  </g>
+</svg>

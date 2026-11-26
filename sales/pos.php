@@ -50,6 +50,20 @@ if (is_post()) {
 }
 $items = fetch_all('SELECT i.id, i.sku, i.name, i.selling_price, i.stock_qty, i.unit, c.name AS cat FROM inventory_items i JOIN categories c ON c.id=i.category_id WHERE i.is_active=1 ORDER BY i.name');
 $custs = fetch_all('SELECT id, full_name FROM customers WHERE is_active=1 ORDER BY full_name');
+$itemById = [];
+foreach ($items as $item) $itemById[(int)$item['id']] = $item;
+$initialCart = [];
+if (is_post()) {
+    foreach ((array)($_POST['item_id'] ?? []) as $k => $rawId) {
+        $id = parse_int($rawId);
+        $qty = parse_int($_POST['qty'][$k] ?? '');
+        if ($id && $qty && isset($itemById[$id])) {
+            $item = $itemById[$id];
+            if (!isset($initialCart[$id])) $initialCart[$id] = ['name' => $item['name'], 'price' => (float)$item['selling_price'], 'stock' => (int)$item['stock_qty'], 'qty' => 0];
+            $initialCart[$id]['qty'] += $qty;
+        }
+    }
+}
 $pageTitle = 'Point of Sale';
 require __DIR__ . '/../includes/header.php';
 ?>
@@ -62,27 +76,30 @@ require __DIR__ . '/../includes/header.php';
 <div class="card"><h2 class="card-title"><i class="fa-solid fa-cart-shopping"></i> Cart</h2>
  <form method="post" id="saleForm"><?= csrf_field() ?><?= form_token_field('pos') ?>
   <div id="cart"><p class="empty muted">Click a part to add it.</p></div>
-  <label class="field mt"><span>Customer (optional)</span><select name="customer_id"><option value="">Walk-in</option><?php foreach ($custs as $c): ?><option value="<?= (int)$c['id'] ?>"><?= e($c['full_name']) ?></option><?php endforeach; ?></select></label>
-  <label class="field"><span>Discount (amount)</span><input type="number" step="0.01" min="0" name="discount" id="disc" value="0"></label>
+  <label class="field mt"><span>Customer (optional)</span><select name="customer_id"><option value="">Walk-in</option><?php foreach ($custs as $c): ?><option value="<?= (int)$c['id'] ?>" <?= (string)$c['id'] === (string)($_POST['customer_id'] ?? '') ? 'selected' : '' ?>><?= e($c['full_name']) ?></option><?php endforeach; ?></select></label>
+  <label class="field"><span>Discount (amount)</span><input type="number" step="0.01" min="0" name="discount" id="disc" value="<?= e($_POST['discount'] ?? '0') ?>"></label>
   <div class="totals"><div><span>Subtotal</span><span id="sub">&#8369;0.00</span></div><div class="grand"><span>Total</span><span id="tot">&#8369;0.00</span></div></div>
-  <label class="field mt"><span>Cash received *</span><input type="number" step="0.01" min="0" name="tendered" id="cash" required></label>
+  <label class="field mt"><span>Cash received *</span><input type="number" step="0.01" min="0" name="tendered" id="cash" value="<?= e($_POST['tendered'] ?? '') ?>" required></label>
   <div class="totals"><div class="grand"><span>Change</span><span id="chg">&#8369;0.00</span></div></div>
   <button class="btn btn-primary btn-block mt" type="submit"><i class="fa-solid fa-check"></i> Complete sale</button></form></div></div>
 <script>
-const cart={}, fm=n=>'\u20b1'+n.toFixed(2);
+const cart=<?= json_encode($initialCart, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>, fm=n=>'\u20b1'+n.toFixed(2), esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const box=document.getElementById('cart'),disc=document.getElementById('disc'),cash=document.getElementById('cash');
 function draw(){box.innerHTML='';let sub=0;const ids=Object.keys(cart);
  if(!ids.length)box.innerHTML='<p class="empty muted">Click a part to add it.</p>';
  ids.forEach(id=>{const c=cart[id];sub+=c.price*c.qty;const d=document.createElement('div');d.className='line-row';d.style.gridTemplateColumns='3fr 90px 90px 36px';
-  d.innerHTML='<div>'+c.name+'<br><small class="muted">'+fm(c.price)+'</small><input type="hidden" name="item_id[]" value="'+id+'"></div><input type="number" name="qty[]" min="1" max="'+c.stock+'" value="'+c.qty+'"><b style="padding-top:10px">'+fm(c.price*c.qty)+'</b><button type="button" class="btn btn-sm btn-outline">&times;</button>';
+  d.innerHTML='<div>'+esc(c.name)+'<br><small class="muted">'+fm(c.price)+'</small><input type="hidden" name="item_id[]" value="'+esc(id)+'"></div><input type="number" name="qty[]" min="1" max="'+esc(c.stock)+'" value="'+esc(c.qty)+'"><b style="padding-top:10px">'+fm(c.price*c.qty)+'</b><button type="button" class="btn btn-sm btn-outline">&times;</button>';
   d.querySelector('input[type=number]').addEventListener('change',e=>{let v=parseInt(e.target.value)||1;v=Math.max(1,Math.min(v,c.stock));c.qty=v;draw();});
   d.querySelector('button').onclick=()=>{delete cart[id];draw();};box.appendChild(d);});
  const dv=Math.min(parseFloat(disc.value)||0,sub),t=sub-dv;document.getElementById('sub').textContent=fm(sub);document.getElementById('tot').textContent=fm(t);
  const ch=(parseFloat(cash.value)||0)-t;document.getElementById('chg').textContent=fm(ch>0?ch:0);}
-document.querySelectorAll('#ptable tbody tr').forEach(r=>r.addEventListener('click',()=>{const id=r.dataset.id,stock=+r.dataset.stock;if(stock<=0){alert('Out of stock.');return;}
- if(cart[id]){if(cart[id].qty<stock)cart[id].qty++;else alert('No more stock available.');}else cart[id]={name:r.dataset.name,price:+r.dataset.price,stock:stock,qty:1};draw();}));
+function addProduct(r){const id=r.dataset.id,stock=+r.dataset.stock;if(stock<=0){alert('Out of stock.');return;}
+ if(cart[id]){if(cart[id].qty<stock)cart[id].qty++;else alert('No more stock available.');}else cart[id]={name:r.dataset.name,price:+r.dataset.price,stock:stock,qty:1};draw();}
+document.querySelectorAll('#ptable tbody tr').forEach(r=>r.addEventListener('click',()=>addProduct(r)));
 disc.addEventListener('input',draw);cash.addEventListener('input',draw);
 document.getElementById('psearch').addEventListener('input',e=>{const q=e.target.value.toLowerCase();document.querySelectorAll('#ptable tbody tr').forEach(r=>r.style.display=r.textContent.toLowerCase().includes(q)?'':'none');});
+document.getElementById('psearch').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();const first=[...document.querySelectorAll('#ptable tbody tr')].find(r=>r.style.display!=='none');if(first){addProduct(first);e.target.select();}}});
+draw();
 document.getElementById('saleForm').addEventListener('submit',e=>{if(!Object.keys(cart).length){e.preventDefault();alert('The cart is empty.');}});
 </script>
 <?php require __DIR__ . '/../includes/footer.php'; ?>

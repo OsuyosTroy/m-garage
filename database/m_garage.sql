@@ -58,6 +58,7 @@ CREATE TABLE inventory_items (
   supplier_id INT UNSIGNED NULL,
   purchase_cost DECIMAL(12,2) NOT NULL DEFAULT 0.00,
   selling_price DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+  labor_rate DECIMAL(12,2) NOT NULL DEFAULT 0.00,
   stock_qty INT NOT NULL DEFAULT 0,
   min_stock INT NOT NULL DEFAULT 5,
   unit VARCHAR(20) NOT NULL DEFAULT 'pc',
@@ -213,9 +214,11 @@ CREATE TABLE labor_entries (
   amount DECIMAL(12,2) NOT NULL,
   status ENUM('active','removed') NOT NULL DEFAULT 'active',
   request_token CHAR(32) NULL,
+  source_part_id INT UNSIGNED NULL,
   created_by INT UNSIGNED NOT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   UNIQUE KEY uq_labor_token (request_token),
+  UNIQUE KEY uq_labor_source_part (source_part_id),
   KEY idx_labor_mech (mechanic_id),
   CONSTRAINT fk_labor_job FOREIGN KEY (repair_job_id) REFERENCES repair_jobs(id) ON UPDATE CASCADE ON DELETE CASCADE,
   CONSTRAINT fk_labor_mech FOREIGN KEY (mechanic_id) REFERENCES mechanics(id) ON UPDATE CASCADE,
@@ -230,6 +233,7 @@ CREATE TABLE repair_parts_used (
   mechanic_id INT UNSIGNED NULL,
   quantity INT UNSIGNED NOT NULL,
   unit_price DECIMAL(12,2) NOT NULL,
+  labor_unit_rate DECIMAL(12,2) NOT NULL DEFAULT 0.00,
   line_subtotal DECIMAL(12,2) NOT NULL,
   status ENUM('active','removed','reversed') NOT NULL DEFAULT 'active',
   request_token CHAR(32) NULL,
@@ -359,19 +363,19 @@ INSERT INTO suppliers (name, contact_person, phone, address, notes, is_demo) VAL
 ('DEMO Bohol Moto Supply','Sample Contact','09000000001','Tagbilaran City, Bohol','Demonstration supplier',1),
 ('DEMO Visayas Parts Depot','Sample Contact','09000000002','Cebu City','Demonstration supplier',1);
 
-INSERT INTO inventory_items (sku,name,category_id,brand,compatibility,supplier_id,purchase_cost,selling_price,stock_qty,min_stock,unit,is_demo) VALUES
-('ENG-SP-001','Spark Plug',1,'NGK','Most 110-150cc',1,70.00,120.00,40,10,'pc',1),
-('BRK-PD-001','Brake Pad (Front)',2,'Nissin','Honda Click, Beat',1,180.00,280.00,15,5,'set',1),
-('BRK-SH-001','Brake Shoe (Rear)',2,'Generic','Honda XRM, Wave',1,120.00,200.00,12,5,'set',1),
-('ELE-BL-001','Headlight Bulb',3,'Osram','Universal 12V',2,45.00,90.00,25,8,'pc',1),
-('ELE-BT-001','Battery 12V 5Ah',3,'Motolite','Scooters',2,650.00,950.00,6,3,'pc',1),
-('OIL-EO-001','Engine Oil 1L 10W-40',4,'Shell Advance','4-stroke',1,230.00,320.00,30,10,'bottle',1),
-('OIL-GO-001','Gear Oil 120ml',4,'Motul','Scooters',1,55.00,95.00,20,8,'bottle',1),
-('CHN-CH-001','Drive Chain 428H',5,'DID','125cc',2,420.00,650.00,8,3,'pc',1),
-('CHN-SP-001','Sprocket Set',5,'Generic','Honda XRM',2,550.00,850.00,2,3,'set',1),
-('TIR-TR-001','Tire 80/90-14',6,'Michelin','Scooters',2,1100.00,1500.00,4,2,'pc',1),
-('ACC-MR-001','Side Mirror (Pair)',7,'Generic','Universal',1,150.00,250.00,0,4,'pair',1),
-('MNT-CL-001','Chain Lube 150ml',8,'Motul','Universal',1,160.00,240.00,14,5,'can',1);
+INSERT INTO inventory_items (sku,name,category_id,brand,compatibility,supplier_id,purchase_cost,selling_price,labor_rate,stock_qty,min_stock,unit,is_demo) VALUES
+('ENG-SP-001','Spark Plug',1,'NGK','Most 110-150cc',1,70.00,120.00,50.00,40,10,'pc',1),
+('BRK-PD-001','Brake Pad (Front)',2,'Nissin','Honda Click, Beat',1,180.00,280.00,150.00,15,5,'set',1),
+('BRK-SH-001','Brake Shoe (Rear)',2,'Generic','Honda XRM, Wave',1,120.00,200.00,120.00,12,5,'set',1),
+('ELE-BL-001','Headlight Bulb',3,'Osram','Universal 12V',2,45.00,90.00,50.00,25,8,'pc',1),
+('ELE-BT-001','Battery 12V 5Ah',3,'Motolite','Scooters',2,650.00,950.00,50.00,6,3,'pc',1),
+('OIL-EO-001','Engine Oil 1L 10W-40',4,'Shell Advance','4-stroke',1,230.00,320.00,100.00,30,10,'bottle',1),
+('OIL-GO-001','Gear Oil 120ml',4,'Motul','Scooters',1,55.00,95.00,50.00,20,8,'bottle',1),
+('CHN-CH-001','Drive Chain 428H',5,'DID','125cc',2,420.00,650.00,200.00,8,3,'pc',1),
+('CHN-SP-001','Sprocket Set',5,'Generic','Honda XRM',2,550.00,850.00,250.00,2,3,'set',1),
+('TIR-TR-001','Tire 80/90-14',6,'Michelin','Scooters',2,1100.00,1500.00,250.00,4,2,'pc',1),
+('ACC-MR-001','Side Mirror (Pair)',7,'Generic','Universal',1,150.00,250.00,80.00,0,4,'pair',1),
+('MNT-CL-001','Chain Lube 150ml',8,'Motul','Universal',1,160.00,240.00,0.00,14,5,'can',1);
 
 INSERT INTO inventory_movements (item_id, movement_type, quantity_change, qty_before, qty_after, reason, created_by)
 SELECT id,'adjustment',stock_qty,0,stock_qty,'Demo opening stock',1 FROM inventory_items WHERE is_demo=1 AND stock_qty>0;
@@ -401,12 +405,15 @@ INSERT INTO payments (payment_no, payable_type, sale_id, amount_due, amount_tend
 INSERT INTO inventory_movements (item_id, movement_type, quantity_change, qty_before, qty_after, reference_type, reference_id, reason, created_by) VALUES
 (1,'sale',-2,40,38,'sale',1,'Sale OR-DEMO-0001',2),(6,'sale',-1,30,29,'sale',1,'Sale OR-DEMO-0001',2);
 
--- Demo repair job 1: brake pad + spark plug (400.00) + labor (350.00) = 750.00, partially paid 500.00
+-- Demo repair job 1: parts 400.00 + part labor 200.00 + tune-up 150.00 = 750.00; partially paid 500.00
 INSERT INTO repair_jobs (job_no, customer_id, motorcycle_id, date_received, reported_problem, diagnosis, requested_services, status, parts_subtotal, labor_subtotal, discount, total_due, amount_paid, payment_status, created_by)
 VALUES ('JOB-DEMO-0001',1,1,CURDATE(),'Weak brakes and rough idle','Worn front brake pad, fouled spark plug','Brake pad and spark plug replacement','Completed',400.00,350.00,0.00,750.00,500.00,'Partially Paid',2);
 INSERT INTO repair_mechanics (repair_job_id, mechanic_id) VALUES (1,1),(1,2);
-INSERT INTO labor_entries (repair_job_id, mechanic_id, service_type, description, service_date, amount, created_by) VALUES (1,2,'Brake service and tune-up','Replace pad, replace plug, adjust',CURDATE(),350.00,2);
-INSERT INTO repair_parts_used (repair_job_id, item_id, quantity, unit_price, line_subtotal, recorded_by) VALUES (1,2,1,280.00,280.00,2),(1,1,1,120.00,120.00,2);
+INSERT INTO repair_parts_used (repair_job_id, item_id, mechanic_id, quantity, unit_price, labor_unit_rate, line_subtotal, recorded_by) VALUES (1,2,2,1,280.00,150.00,280.00,2),(1,1,1,1,120.00,50.00,120.00,2);
+INSERT INTO labor_entries (repair_job_id, mechanic_id, service_type, description, service_date, amount, request_token, source_part_id, created_by)
+SELECT p.repair_job_id, p.mechanic_id, CONCAT('Install: ', i.name), CONCAT('Auto labor: ', p.quantity, ' x ', p.labor_unit_rate), CURDATE(), p.quantity*p.labor_unit_rate, REPLACE(UUID(),'-',''), p.id, 2
+FROM repair_parts_used p JOIN inventory_items i ON i.id=p.item_id WHERE p.repair_job_id=1;
+INSERT INTO labor_entries (repair_job_id, mechanic_id, service_type, description, service_date, amount, created_by) VALUES (1,1,'Tune-up','Adjust engine idle',CURDATE(),150.00,2);
 INSERT INTO inventory_movements (item_id, movement_type, quantity_change, qty_before, qty_after, reference_type, reference_id, reason, created_by) VALUES
 (2,'repair_use',-1,15,14,'repair_job',1,'Used in JOB-DEMO-0001',2),(1,'repair_use',-1,38,37,'repair_job',1,'Used in JOB-DEMO-0001',2);
 INSERT INTO payments (payment_no, payable_type, repair_job_id, amount_due, amount_tendered, amount_applied, change_given, received_by) VALUES ('PAY-DEMO-0002','repair',1,750.00,500.00,500.00,0.00,2);

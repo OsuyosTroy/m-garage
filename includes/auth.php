@@ -26,6 +26,7 @@ function modules(): array {
         ['Suppliers',               'fa-truck-field',    'inventory/suppliers.php',     $both],
         ['Stock Receiving',         'fa-dolly',          'inventory/receiving.php',     $both],
         ['Repair and Service Jobs', 'fa-screwdriver-wrench', 'repairs/index.php',       $both],
+        ['Mechanics and Labor',     'fa-people-group',   'mechanics/index.php',         $both],
         ['Point of Sale',           'fa-cash-register',  'sales/pos.php',               $both],
         ['Payments and Transactions','fa-receipt',       'payments/index.php',          $both],
         ['Reports',                 'fa-chart-line',     'reports/index.php',           $both],

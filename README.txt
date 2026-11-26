@@ -34,7 +34,8 @@ QUICK REPAIR ENTRY
 - Cashiers can enter customer and motorcycle details, the mechanic responsible, parts used, labor, discount and any payment on one screen.
 - Use Repairs > Quick repair entry. Existing customers can be selected, or a new customer and motorcycle can be registered inline.
 - Choose the mechanic responsible once. Parts and labor lines default to that mechanic; choose another only when needed. Mechanics are assigned to the job, parts are listed under the mechanic who used them, and stock and totals update when saved.
-- For an existing database, import database/migrations/20261028_add_mechanic_to_repair_parts.sql once before using the mechanic-on-parts field. This workspace database already has the update.
+- Each part has a labor rate per unit. Quick repair entry calculates labor as quantity used multiplied by that part's rate, and saves the rate with the repair so later catalog changes do not alter old jobs. Set the rate when adding or editing an inventory item; additional job labor can still be added when needed.
+- For an existing database, import database/migrations/20261028_add_mechanic_to_repair_parts.sql and database/migrations/20261125_add_part_labor_rates.sql once. This workspace database already has both updates.
 
 TEST CHECKLIST
  1. Log in as admin, change password, create a cashier account (Admin > User Management).

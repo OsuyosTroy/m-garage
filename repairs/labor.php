@@ -43,7 +43,7 @@ require __DIR__ . '/../includes/header.php';
 echo job_tabs($id, 'labor');
 ?>
 <div class="grid-2">
-<div class="card"><h2 class="card-title">Add labor charge</h2><?php foreach ($errors as $er): ?><div class="alert alert-error"><?= e($er) ?></div><?php endforeach; ?>
+<div class="card"><h2 class="card-title">Add extra labor charge</h2><p class="hint">Labor from parts used is calculated automatically. Add a manual charge here only for additional work.</p><?php foreach ($errors as $er): ?><div class="alert alert-error"><?= e($er) ?></div><?php endforeach; ?>
 <?php if (!$assigned): ?><div class="alert alert-warning">No mechanic is assigned. <a href="assign_mechanics.php?job_id=<?= (int)$id ?>">Assign mechanics</a> first.</div><?php endif; ?>
 <form method="post"><?= csrf_field() ?><?= form_token_field('labor') ?><input type="hidden" name="job_id" value="<?= (int)$id ?>">
  <label class="field"><span>Mechanic *</span><select name="mechanic_id" required><option value="">Select...</option><?php foreach ($assigned as $m): ?><option value="<?= (int)$m['id'] ?>"><?= e($m['full_name']) ?></option><?php endforeach; ?></select></label>
@@ -54,7 +54,7 @@ echo job_tabs($id, 'labor');
  <button class="btn btn-primary" type="submit" <?= job_locked($job) ? 'disabled' : '' ?>>Add labor</button></form></div>
 <div class="card"><h2 class="card-title">Labor entries</h2><div class="table-wrap"><table class="table"><thead><tr><th>Service</th><th>Mechanic</th><th class="num">Charge</th><th></th></tr></thead><tbody>
 <?php foreach ($labor as $l): ?><tr><td><?= e($l['service_type']) ?><br><small class="muted"><?= e($l['service_date']) ?> <?= e($l['description']) ?></small></td><td><?= e($l['full_name']) ?></td><td class="num"><?= money($l['amount']) ?></td>
-<td><?php if (!job_locked($job)): ?><form method="post" data-confirm="Remove this labor entry?"><?= csrf_field() ?><input type="hidden" name="job_id" value="<?= (int)$id ?>"><input type="hidden" name="action" value="remove"><input type="hidden" name="labor_id" value="<?= (int)$l['id'] ?>"><button class="btn btn-sm btn-outline" type="submit"><i class="fa-solid fa-trash"></i></button></form><?php endif; ?></td></tr>
+<td><?php if ($l['source_part_id']): ?><small class="muted">From part</small><?php elseif (!job_locked($job)): ?><form method="post" data-confirm="Remove this labor entry?"><?= csrf_field() ?><input type="hidden" name="job_id" value="<?= (int)$id ?>"><input type="hidden" name="action" value="remove"><input type="hidden" name="labor_id" value="<?= (int)$l['id'] ?>"><button class="btn btn-sm btn-outline" type="submit"><i class="fa-solid fa-trash"></i></button></form><?php endif; ?></td></tr>
 <?php endforeach; if (!$labor): ?><tr><td colspan="4" class="empty">No labor entries.</td></tr><?php endif; ?>
 <tr><td colspan="2" class="num"><strong>Labor subtotal</strong></td><td class="num"><strong><?= money($total) ?></strong></td><td></td></tr></tbody></table></div></div></div>
 <?php require __DIR__ . '/../includes/footer.php'; ?>

@@ -5,7 +5,7 @@ guard();
 
 $errors = [];
 $mechanics = fetch_all("SELECT id, full_name FROM mechanics WHERE employment_status='active' ORDER BY full_name");
-$items = fetch_all('SELECT id, sku, name, selling_price, stock_qty, unit FROM inventory_items WHERE is_active=1 ORDER BY name');
+$items = fetch_all('SELECT id, sku, name, selling_price, labor_rate, stock_qty, unit FROM inventory_items WHERE is_active=1 ORDER BY name');
 
 if (is_post()) {
     require_csrf();
@@ -60,7 +60,6 @@ if (is_post()) {
         if (!$mechanicId || $type === '' || mb_strlen($type) > 120 || $amount === null) { $errors[] = 'Each labor line needs a mechanic, service and valid charge.'; break; }
         $laborRows[] = ['mechanic_id' => $mechanicId, 'type' => $type, 'description' => trim((string)($_POST['labor_description'][$i] ?? '')), 'amount' => $amount];
     }
-
     if (!$token) $errors[] = 'This form was already submitted or expired. Check the repair list before trying again.';
     if (!valid_date($date)) $errors[] = 'Enter a valid date received.';
     if ($problem === '') $errors[] = 'Enter the customer\'s reported problem.';
@@ -76,19 +75,23 @@ if (is_post()) {
     $needsNewMechanic = $primaryMechanic === 'new' || in_array('new', array_column($partRows, 'mechanic_id'), true) || in_array('new', array_column($laborRows, 'mechanic_id'), true);
     if ($needsNewMechanic && ($newMechanicName === '' || mb_strlen($newMechanicName) > 150)) $errors[] = 'Enter the new mechanic\'s name.';
     $partSubtotal = 0.0;
+    $partLaborSubtotal = 0.0;
     foreach ($partRows as &$row) {
-        $item = fetch_row('SELECT name, selling_price, is_active FROM inventory_items WHERE id=?', [$row['item_id']]);
+        $item = fetch_row('SELECT name, selling_price, labor_rate, is_active FROM inventory_items WHERE id=?', [$row['item_id']]);
         if (!$item || !$item['is_active']) { $errors[] = 'A selected part is no longer available.'; break; }
         if ($row['mechanic_id'] !== 'new' && !in_array($row['mechanic_id'], $validMechanics, true)) { $errors[] = 'Choose an active mechanic for every parts line.'; break; }
         $row['name'] = $item['name'];
         $row['unit_price'] = (float)$item['selling_price'];
         $row['line_total'] = round($row['quantity'] * $row['unit_price'], 2);
+        $row['labor_unit_rate'] = (float)$item['labor_rate'];
+        $row['labor_total'] = round($row['quantity'] * $row['labor_unit_rate'], 2);
         $partSubtotal += $row['line_total'];
+        $partLaborSubtotal += $row['labor_total'];
     }
     unset($row);
     foreach ($laborRows as $row) if ($row['mechanic_id'] !== 'new' && !in_array($row['mechanic_id'], $validMechanics, true)) { $errors[] = 'Choose an active mechanic for every labor line.'; break; }
     $laborSubtotal = array_sum(array_column($laborRows, 'amount'));
-    $preDiscount = round($partSubtotal + $laborSubtotal, 2);
+    $preDiscount = round($partSubtotal + $partLaborSubtotal + $laborSubtotal, 2);
     if ($discount !== null && $discount > $preDiscount) $errors[] = 'Discount cannot exceed the parts and labor total.';
     $due = round($preDiscount - (float)$discount, 2);
     if ($tendered !== null && $tendered > 0 && $due <= 0) $errors[] = 'There is no balance to pay.';
@@ -134,23 +137,32 @@ if (is_post()) {
                     else $grouped[$key]['quantity'] += $row['quantity'];
                 }
                 $actualPartsSubtotal = 0.0;
+                $actualPartsLaborSubtotal = 0.0;
                 foreach ($grouped as $row) {
-                    $itemCheck = $pdo->prepare('SELECT selling_price,is_active FROM inventory_items WHERE id=? FOR UPDATE');
+                    $itemCheck = $pdo->prepare('SELECT selling_price,labor_rate,is_active,name FROM inventory_items WHERE id=? FOR UPDATE');
                     $itemCheck->execute([$row['item_id']]);
                     $currentItem = $itemCheck->fetch();
                     if (!$currentItem || !$currentItem['is_active']) throw new RuntimeException('A selected part is no longer available.');
                     $row['unit_price'] = (float)$currentItem['selling_price'];
+                    $row['labor_unit_rate'] = (float)$currentItem['labor_rate'];
                     $lineTotal = round($row['quantity'] * $row['unit_price'], 2);
+                    $laborLineTotal = round($row['quantity'] * $row['labor_unit_rate'], 2);
                     $actualPartsSubtotal += $lineTotal;
-                    $pdo->prepare('INSERT INTO repair_parts_used (repair_job_id,item_id,mechanic_id,quantity,unit_price,line_subtotal,request_token,recorded_by) VALUES (?,?,?,?,?,?,?,?)')
-                        ->execute([$jid, $row['item_id'], $row['mechanic_id'], $row['quantity'], $row['unit_price'], $lineTotal, bin2hex(random_bytes(16)), current_user()['id']]);
+                    $actualPartsLaborSubtotal += $laborLineTotal;
+                    $pdo->prepare('INSERT INTO repair_parts_used (repair_job_id,item_id,mechanic_id,quantity,unit_price,labor_unit_rate,line_subtotal,request_token,recorded_by) VALUES (?,?,?,?,?,?,?,?,?)')
+                        ->execute([$jid, $row['item_id'], $row['mechanic_id'], $row['quantity'], $row['unit_price'], $row['labor_unit_rate'], $lineTotal, bin2hex(random_bytes(16)), current_user()['id']]);
+                    $partId = (int)$pdo->lastInsertId();
+                    if ($laborLineTotal > 0) {
+                        $pdo->prepare('INSERT INTO labor_entries (repair_job_id,mechanic_id,service_type,description,service_date,amount,request_token,source_part_id,created_by) VALUES (?,?,?,?,?,?,?,?,?)')
+                            ->execute([$jid, $row['mechanic_id'], 'Install: ' . $currentItem['name'], 'Auto labor: ' . $row['quantity'] . ' x ' . money($row['labor_unit_rate']), $date, $laborLineTotal, bin2hex(random_bytes(16)), $partId, current_user()['id']]);
+                    }
                     stock_change($pdo, $row['item_id'], -$row['quantity'], 'repair_use', 'repair_job', $jid, 'Used in ' . $no, current_user()['id']);
                 }
                 foreach ($laborRows as $row) {
                     $pdo->prepare('INSERT INTO labor_entries (repair_job_id,mechanic_id,service_type,description,service_date,amount,request_token,created_by) VALUES (?,?,?,?,?,?,?,?)')
                         ->execute([$jid, $row['mechanic_id'], $row['type'], $row['description'] ?: null, $date, $row['amount'], bin2hex(random_bytes(16)), current_user()['id']]);
                 }
-                if ($discount > $actualPartsSubtotal + array_sum(array_column($laborRows, 'amount'))) throw new RuntimeException('Discount cannot exceed the current parts and labor total.');
+                if ($discount > $actualPartsSubtotal + $actualPartsLaborSubtotal + array_sum(array_column($laborRows, 'amount'))) throw new RuntimeException('Discount cannot exceed the current parts and labor total.');
                 recalc_job($pdo, $jid);
                 if ($tendered !== null && $tendered > 0) {
                     $fresh = fetch_row('SELECT total_due,amount_paid FROM repair_jobs WHERE id=?', [$jid]);
@@ -172,7 +184,7 @@ if (is_post()) {
 
 $pageTitle = 'Quick Repair Entry';
 require __DIR__ . '/../includes/header.php';
-$itemOptions = array_map(fn($i) => ['id' => (int)$i['id'], 'label' => $i['name'] . ' (' . $i['sku'] . ')', 'stock' => (int)$i['stock_qty'], 'price' => (float)$i['selling_price']], $items);
+$itemOptions = array_map(fn($i) => ['id' => (int)$i['id'], 'label' => $i['name'] . ' (' . $i['sku'] . ')', 'stock' => (int)$i['stock_qty'], 'price' => (float)$i['selling_price'], 'labor_rate' => (float)$i['labor_rate']], $items);
 $mechanicOptions = array_map(fn($m) => ['id' => (int)$m['id'], 'name' => $m['full_name']], $mechanics);
 ?>
 <div class="quick-entry-intro"><p>Record the customer, assigned mechanic, parts, labor and payment in one place.</p><span>Fields marked * are required.</span></div>
@@ -197,8 +209,11 @@ $mechanicOptions = array_map(fn($m) => ['id' => (int)$m['id'], 'name' => $m['ful
  <label class="field full"><span>Notes</span><input name="notes" value="<?= old('notes') ?>"></label>
  </div><label class="field"><span>New mechanic name (if you selected “Add a new mechanic”)</span><input id="newMechanicName" name="new_mechanic_name" value="<?= old('new_mechanic_name') ?>" placeholder="Enter mechanic name once"></label><p class="hint">Parts and labor lines default to this mechanic. Choose a different mechanic on a line only when needed.</p></div>
 
-<div class="card quick-entry-card"><h2 class="card-title"><span class="step-number">3</span> Parts used</h2><div id="partRows"></div><button type="button" class="btn btn-sm btn-outline" id="addPart"><i class="fa-solid fa-plus"></i> Add part</button></div>
-<div class="card quick-entry-card"><h2 class="card-title"><span class="step-number">4</span> Labor</h2><div id="laborRows"></div><button type="button" class="btn btn-sm btn-outline" id="addLabor"><i class="fa-solid fa-plus"></i> Add labor</button></div>
+<div class="card quick-entry-card"><h2 class="card-title"><span class="step-number">3</span> Parts used</h2><div id="partRows"></div><button type="button" class="btn btn-sm btn-outline" id="addPart"><i class="fa-solid fa-plus"></i> Add part</button><p class="hint">Parts with zero stock are disabled. Add actual stock in <a href="../inventory/index.php">Inventory</a> first (open the item and use Adjust stock).</p></div>
+<div class="card quick-entry-card"><h2 class="card-title"><span class="step-number">4</span> Labor</h2>
+ <p class="hint">Labor is calculated from the selected parts and quantities using each part's rate. The rate is saved with the job; extra labor can be added when needed.</p>
+ <div id="partLaborPreview" class="totals"><div class="grand"><span>Labor from parts</span><strong>₱0.00</strong></div></div>
+ <div id="laborRows"></div><button type="button" class="btn btn-sm btn-outline" id="addLabor"><i class="fa-solid fa-plus"></i> Add extra labor (optional)</button></div>
 <div class="card quick-entry-card"><h2 class="card-title"><span class="step-number">5</span> Discount and payment</h2><div class="form-grid">
  <label class="field"><span>Discount</span><input type="number" name="discount" min="0" step="0.01" value="<?= e($_POST['discount'] ?? '0') ?>"></label>
  <label class="field"><span>Cash received (optional)</span><input type="number" name="cash_received" min="0.01" step="0.01" value="<?= e($_POST['cash_received'] ?? '') ?>"><small class="hint">Leave blank if the customer will pay later. Partial payments are accepted.</small></label>
@@ -214,8 +229,9 @@ const newMechanicInput=document.getElementById('newMechanicName');
 function syncNewMechanicRequirement(){newMechanicInput.required=primarySelect.value==='new'||[...document.querySelectorAll('select[name="part_mechanic[]"],select[name="labor_mechanic[]"]')].some(s=>s.value==='new');}
 function mechanicSelect(name){const s=document.createElement('select');s.name=name;s.required=true;s.append(option('','Use repair mechanic...'));mechanics.forEach(m=>s.append(option(m.id,m.name)));s.append(option('new','＋ Add new mechanic'));s.value=primarySelect.value;return s;}
 let previousPrimary=primarySelect.value;primarySelect.addEventListener('change',()=>{document.querySelectorAll('select[name="part_mechanic[]"],select[name="labor_mechanic[]"]').forEach(s=>{if(!s.value||s.value===previousPrimary)s.value=primarySelect.value;});previousPrimary=primarySelect.value;syncNewMechanicRequirement();});
-function removeButton(row){const b=document.createElement('button');b.type='button';b.className='btn btn-sm btn-outline';b.textContent='Remove';b.addEventListener('click',()=>{row.remove();syncNewMechanicRequirement();});return b;}
-document.getElementById('addPart').addEventListener('click',()=>{const row=document.createElement('div');row.className='line-row quick-entry-row';const item= document.createElement('select');item.name='part_item[]';item.append(option('','Select part...'));items.forEach(i=>{const o=option(i.id,`${i.label} — stock ${i.stock} — ₱${i.price.toFixed(2)}`);if(i.stock<=0)o.disabled=true;item.append(o);});const qty=document.createElement('input');qty.type='number';qty.name='part_qty[]';qty.min='1';qty.placeholder='Qty';const mech=mechanicSelect('part_mechanic[]');mech.addEventListener('change',syncNewMechanicRequirement);row.append(item,qty,mech,removeButton(row));document.getElementById('partRows').append(row);syncNewMechanicRequirement();});
+function updatePartLaborPreview(){let total=0;document.querySelectorAll('.quick-entry-row').forEach(row=>{const itemId=row.querySelector('select[name="part_item[]"]').value;const qty=parseInt(row.querySelector('input[name="part_qty[]"]').value)||0;const item=items.find(i=>String(i.id)===itemId);const line=item?item.labor_rate*qty:0;total+=line;row.querySelector('.part-labor-line').textContent=item?`Labor: ₱${item.labor_rate.toFixed(2)} × ${qty||0} = ₱${line.toFixed(2)}`:'';});document.querySelector('#partLaborPreview strong').textContent='₱'+total.toFixed(2);}
+function removeButton(row,onRemove){const b=document.createElement('button');b.type='button';b.className='btn btn-sm btn-outline';b.textContent='Remove';b.addEventListener('click',()=>{row.remove();syncNewMechanicRequirement();if(onRemove)onRemove();});return b;}
+document.getElementById('addPart').addEventListener('click',()=>{const row=document.createElement('div');row.className='line-row quick-entry-row';const item= document.createElement('select');item.name='part_item[]';item.append(option('','Select part...'));items.forEach(i=>{const o=option(i.id,`${i.label} — stock ${i.stock} — price ₱${i.price.toFixed(2)} — labor ₱${i.labor_rate.toFixed(2)}/unit`);if(i.stock<=0)o.disabled=true;item.append(o);});const qty=document.createElement('input');qty.type='number';qty.name='part_qty[]';qty.min='1';qty.placeholder='Qty';const mech=mechanicSelect('part_mechanic[]');mech.addEventListener('change',syncNewMechanicRequirement);const laborLine=document.createElement('small');laborLine.className='hint part-labor-line';item.addEventListener('change',updatePartLaborPreview);qty.addEventListener('input',updatePartLaborPreview);row.append(item,qty,mech,laborLine,removeButton(row,updatePartLaborPreview));document.getElementById('partRows').append(row);syncNewMechanicRequirement();updatePartLaborPreview();});
 document.getElementById('addLabor').addEventListener('click',()=>{const row=document.createElement('div');row.className='line-row quick-labor-row';const mech=mechanicSelect('labor_mechanic[]');mech.addEventListener('change',syncNewMechanicRequirement);const type=document.createElement('input');type.name='labor_type[]';type.placeholder='Service (e.g. tune-up)';const amount=document.createElement('input');amount.type='number';amount.name='labor_amount[]';amount.min='0.01';amount.step='0.01';amount.placeholder='Labor charge';const desc=document.createElement('input');desc.name='labor_description[]';desc.placeholder='Details (optional)';row.append(mech,type,amount,desc,removeButton(row));document.getElementById('laborRows').append(row);syncNewMechanicRequirement();});
 document.getElementById('addPart').click();
 </script>

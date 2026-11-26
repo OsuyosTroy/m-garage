@@ -17,6 +17,7 @@ if (is_post()) {
                 foreach ($parts->fetchAll() as $p) {
                     stock_change($pdo, (int)$p['item_id'], (int)$p['quantity'], 'reversal', 'repair_job', $id, "Job {$job['job_no']} cancelled: $reason", current_user()['id']);
                     $pdo->prepare("UPDATE repair_parts_used SET status='reversed' WHERE id=?")->execute([$p['id']]);
+                    $pdo->prepare("UPDATE labor_entries SET status='removed' WHERE source_part_id=? AND status='active'")->execute([$p['id']]);
                 }
                 $pdo->prepare("UPDATE repair_jobs SET status='Cancelled', notes=CONCAT(COALESCE(notes,''), ?) WHERE id=?")->execute(["\nCancelled: $reason", $id]);
                 recalc_job($pdo, $id);

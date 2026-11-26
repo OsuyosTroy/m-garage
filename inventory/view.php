@@ -28,7 +28,7 @@ require __DIR__ . '/../includes/header.php';
   <div class="card"><h2 class="card-title"><i class="fa-solid fa-box"></i> Item details</h2>
     <dl class="kv"><dt>SKU</dt><dd><?= e($item['sku']) ?></dd><dt>Category</dt><dd><?= e($item['cat']) ?></dd><dt>Brand</dt><dd><?= e($item['brand']) ?></dd>
     <dt>Compatibility</dt><dd><?= e($item['compatibility']) ?></dd><dt>Supplier</dt><dd><?= e($item['sup']) ?></dd>
-    <dt>Purchase cost</dt><dd><?= money($item['purchase_cost']) ?></dd><dt>Selling price</dt><dd><?= money($item['selling_price']) ?></dd>
+    <dt>Purchase cost</dt><dd><?= money($item['purchase_cost']) ?></dd><dt>Selling price</dt><dd><?= money($item['selling_price']) ?></dd><dt>Labor per unit</dt><dd><?= money($item['labor_rate']) ?></dd>
     <dt>Stock</dt><dd><strong><?= (int)$item['stock_qty'] ?> <?= e($item['unit']) ?></strong> <?= stock_badge((int)$item['stock_qty'], (int)$item['min_stock']) ?></dd>
     <dt>Minimum stock</dt><dd><?= (int)$item['min_stock'] ?></dd><dt>Description</dt><dd><?= nl2br(e($item['description'])) ?></dd>
     <dt>Created</dt><dd><?= e($item['created_at']) ?></dd><dt>Last updated</dt><dd><?= e($item['updated_at']) ?></dd></dl>
